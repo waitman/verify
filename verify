@@ -1,0 +1,90 @@
+#!/usr/local/bin/php -q
+<?php
+
+/* don't run from http */
+if(!defined('STDIN')) {
+        echo 'Run from command line only.'."\n";
+        exit();
+}
+
+$dom = $argv[1];
+if ($dom=='') {
+	echo 'Usage: verify domainname '."\n";
+	exit();
+}
+
+define('CRLF', "\r\n");
+
+$host = "ssl://rr-n1-tor.opensrs.net"; // CHANGEME
+$port = '55443';
+$timeout = 30;
+$user = "opensrsusername"; // CHANGEME
+$private_key= "opensrsprivatekey"; // CHANGEME
+
+
+
+/* Connect to api interface */
+$fp = fsockopen($host, $port, $errno, $errstr, $timeout);
+if (!$fp) {
+	print "Connection failed. $errno - $errstr\n";
+	exit(0);
+} 
+
+$msg =<<<EOF
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<!DOCTYPE OPS_envelope SYSTEM "ops.dtd">
+<OPS_envelope>
+ <header>
+  <version>0.9</version>
+ </header>
+ <body>
+  <data_block>
+   <dt_assoc>
+   <item key="protocol">XCP</item>
+   <item key="action">get_registrant_verification_status</item>
+   <item key="object">domain</item>
+   <item key="attributes">
+	 <dt_assoc>
+		<item key="domain">$dom</item>
+	 </dt_assoc>
+   </item>
+   </dt_assoc>
+  </data_block>
+ </body>
+</OPS_envelope>
+EOF;
+
+$len = strlen($msg);
+$signature = md5(md5($msg.$private_key).$private_key);
+$header = "POST / HTTP/1.0". CRLF;
+$header .= "Content-Type: text/xml" . CRLF;
+$header .= "X-Username: " . $user . CRLF;
+$header .= "X-Signature: " . $signature . CRLF;
+$header .= "Content-Length: " . $len . CRLF . CRLF;
+
+fwrite($fp, $header);
+fwrite($fp, $msg);
+
+$contents = '';
+while (!feof($fp)) {
+  	$contents .= fread($fp, 8192);
+}
+
+if (preg_match('/<item key="is_success">0<\/item>/', $contents)) {
+	preg_match('/<item key="response_text">(.*)<\/item>/', $contents, $match);
+	print "Authentication Failed: $match[1] \n";
+	exit(0);
+}
+
+if (!preg_match('/<item key="object">/', $contents)) {
+	preg_match('/<item key="response_text">(.*)<\/item>/', $contents, $match);
+	print "Authentication Failed: $match[1] \n";
+	exit(0);
+}
+
+fclose($fp);
+$x=explode('<item key="registrant_verification_status">',$contents);
+$d=explode('<',array_pop($x));
+echo $dom."\t".array_shift($d)."\n";
+
+
