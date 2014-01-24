@@ -15,7 +15,7 @@ if ($dom=='') {
 
 define('CRLF', "\r\n");
 
-$host = "ssl://rr-n1-tor.opensrs.net"; // CHANGEME
+$host = "ssl://rr-n1-tor.opensrs.net"; 
 $port = '55443';
 $timeout = 30;
 $user = "opensrsusername"; // CHANGEME
